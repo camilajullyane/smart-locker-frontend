@@ -20,10 +20,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const navigation = [
-  { label: "Overview", to: "/", icon: LayoutDashboardIcon },
+  { label: "Dashboard", to: "/", icon: LayoutDashboardIcon },
   { label: "Lockers", to: "/lockers", icon: BoxesIcon },
-  { label: "Users", to: "/users", icon: UsersIcon },
-  { label: "Settings", to: "/settings", icon: SettingsIcon },
+  { label: "Usuários", to: "/users", icon: UsersIcon },
+  { label: "Configurações", to: "/settings", icon: SettingsIcon },
 ] as const;
 
 function isNavigationItemActive(pathname: string, to: string) {
