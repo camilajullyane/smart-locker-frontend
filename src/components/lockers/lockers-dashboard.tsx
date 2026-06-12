@@ -8,9 +8,9 @@ import {
   WrenchIcon,
 } from "lucide-react";
 
-import { mockLockers } from "@/data/mock-lockers";
 import type { DoorState, Locker, LockerStatus } from "@/types/locker";
 import { SummaryCard } from "@/components/SummaryCard";
+import { useSmartLockerData } from "@/hooks/use-smart-locker-data";
 import {
   Card,
   CardContent,
@@ -51,13 +51,23 @@ function matchesSearch(locker: Locker, search: string) {
 }
 
 export function LockersDashboard() {
-  const [lockers, setLockers] = useState<Locker[]>(mockLockers);
+  const { lockers: firebaseLockers, isLoading, error } = useSmartLockerData();
+  const [lockerOverrides, setLockerOverrides] = useState<
+    Record<string, Partial<Locker>>
+  >({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<LockerStatus | "all">("all");
   const [doorStateFilter, setDoorStateFilter] = useState<DoorState | "all">(
     "all",
   );
   const [selectedLockerId, setSelectedLockerId] = useState<string | null>(null);
+
+  const lockers = useMemo(() => {
+    return firebaseLockers.map((locker) => ({
+      ...locker,
+      ...lockerOverrides[locker.id],
+    }));
+  }, [firebaseLockers, lockerOverrides]);
 
   const selectedLocker =
     lockers.find((locker) => locker.id === selectedLockerId) ?? null;
@@ -88,33 +98,24 @@ export function LockersDashboard() {
   }, [lockers]);
 
   function handleOpenLocker(locker: Locker) {
-    setLockers((currentLockers) =>
-      currentLockers.map((currentLocker) =>
-        currentLocker.id === locker.id
-          ? {
-              ...currentLocker,
-              doorState: "open",
-              lastAccessAt: new Date().toISOString(),
-            }
-          : currentLocker,
-      ),
-    );
+    setLockerOverrides((currentOverrides) => ({
+      ...currentOverrides,
+      [locker.id]: {
+        ...currentOverrides[locker.id],
+        doorState: "open",
+        lastAccessAt: new Date().toISOString(),
+      },
+    }));
   }
 
   function handleToggleMaintenance(locker: Locker) {
-    setLockers((currentLockers) =>
-      currentLockers.map((currentLocker) =>
-        currentLocker.id === locker.id
-          ? {
-              ...currentLocker,
-              status:
-                currentLocker.status === "maintenance"
-                  ? "available"
-                  : "maintenance",
-            }
-          : currentLocker,
-      ),
-    );
+    setLockerOverrides((currentOverrides) => ({
+      ...currentOverrides,
+      [locker.id]: {
+        ...currentOverrides[locker.id],
+        status: locker.status === "maintenance" ? "available" : "maintenance",
+      },
+    }));
   }
 
   return (
@@ -154,6 +155,14 @@ export function LockersDashboard() {
           value={stats.alerts}
         />
       </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">
+          Carregando lockers do Firebase...
+        </p>
+      ) : null}
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Card className="bg-neutral-950/60">
         <CardHeader className="gap-4 border-b border-border pb-4 md:flex md:flex-row md:items-center md:justify-between">

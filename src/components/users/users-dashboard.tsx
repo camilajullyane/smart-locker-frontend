@@ -8,10 +8,10 @@ import {
   UsersIcon,
 } from "lucide-react";
 
-import { mockUsers } from "@/data/mock-users";
 import type { User, UserFormValues } from "@/types/user";
 import { UserFormSheet } from "@/components/users/user-form-sheet";
 import { UsersTable } from "@/components/users/users-table";
+import { useSmartLockerData } from "@/hooks/use-smart-locker-data";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -103,7 +103,11 @@ function matchesSearch(user: User, search: string) {
 }
 
 export function UsersDashboard() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const { users: firebaseUsers, isLoading, error } = useSmartLockerData();
+  const [createdUsers, setCreatedUsers] = useState<User[]>([]);
+  const [userOverrides, setUserOverrides] = useState<
+    Record<string, Partial<User>>
+  >({});
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -111,6 +115,13 @@ export function UsersDashboard() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formValues, setFormValues] = useState<UserFormValues>(emptyFormValues);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+
+  const users = useMemo(() => {
+    return [...createdUsers, ...firebaseUsers].map((user) => ({
+      ...user,
+      ...userOverrides[user.id],
+    }));
+  }, [createdUsers, firebaseUsers, userOverrides]);
 
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
 
@@ -148,27 +159,31 @@ export function UsersDashboard() {
 
   function handleSubmitUser(values: UserFormValues) {
     if (formMode === "edit" && editingUser) {
-      setUsers((currentUsers) =>
+      const updatedUser = {
+        ...editingUser,
+        ...values,
+        deletedAt:
+          values.status === "deleted"
+            ? (editingUser.deletedAt ?? new Date())
+            : undefined,
+        updatedAt: new Date(),
+      };
+
+      setCreatedUsers((currentUsers) =>
         currentUsers.map((user) =>
-          user.id === editingUser.id
-            ? {
-                ...user,
-                ...values,
-                deletedAt:
-                  values.status === "deleted"
-                    ? (user.deletedAt ?? new Date())
-                    : undefined,
-                updatedAt: new Date(),
-              }
-            : user,
+          user.id === editingUser.id ? updatedUser : user,
         ),
       );
+      setUserOverrides((currentOverrides) => ({
+        ...currentOverrides,
+        [editingUser.id]: updatedUser,
+      }));
       setSelectedUserId(editingUser.id);
     }
 
     if (formMode === "create") {
       const newUser = createUser(values);
-      setUsers((currentUsers) => [newUser, ...currentUsers]);
+      setCreatedUsers((currentUsers) => [newUser, ...currentUsers]);
       setSelectedUserId(newUser.id);
     }
 
@@ -177,18 +192,22 @@ export function UsersDashboard() {
   }
 
   function handleSoftDelete(user: User) {
-    setUsers((currentUsers) =>
+    const deletedUser = {
+      ...user,
+      status: "deleted",
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    setCreatedUsers((currentUsers) =>
       currentUsers.map((currentUser) =>
-        currentUser.id === user.id
-          ? {
-              ...currentUser,
-              status: "deleted",
-              deletedAt: new Date(),
-              updatedAt: new Date(),
-            }
-          : currentUser,
+        currentUser.id === user.id ? deletedUser : currentUser,
       ),
     );
+    setUserOverrides((currentOverrides) => ({
+      ...currentOverrides,
+      [user.id]: deletedUser,
+    }));
     setDeleteTarget(null);
   }
 
@@ -226,6 +245,14 @@ export function UsersDashboard() {
           value={stats.deleted}
         />
       </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">
+          Carregando usuarios do Firebase...
+        </p>
+      ) : null}
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <Card className="bg-neutral-950/60">
         <CardHeader className="gap-4 border-b border-border pb-4 md:flex md:flex-row md:items-center md:justify-between">
